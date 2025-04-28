@@ -1,0 +1,209 @@
+---
+title: "amort-prepay-v01"
+output: html_document
+date: "2025-04-26"
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(data.table)
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r level.pay.calc_f}
+level.pay.calc<-function(rem.term,monthly.rate)
+{
+  monthly.payment<-(monthly.rate*(1+monthly.rate)^rem.term)/((1+monthly.rate)^rem.term-1)
+  return(monthly.payment)
+}
+```
+
+```{r amort.loan.cf_f}
+# amortize single loan incorporating prepayments
+# CPR as 1 signifies paid-in-full, 0<CPR<1 are curtailments
+amort.loan.cf<-function(orig.term,note.rate,orig.bal,cpr=c(NA))
+{
+  monthly.rate<-note.rate/12
+  if(is.na(cpr[1])){
+    smm<-replicate(orig.term,0)
+  } else {
+    smm<-1-(1-cpr)^(1/12)
+  }
+  level.pay<-level.pay.calc(orig.term,monthly.rate)*orig.bal
+  cf<-data.table(mon=1:orig.term)
+  cf[1,bbal:=orig.bal]
+  cf[,int:=0]
+  cf[,sched.prin:=0]
+  cf[,unsched.prin:=0]
+  cf[,prin:=0]
+  cf[,eschedbal:=0]
+  cf[,ebal:=0]
+  mo.bbal<-orig.bal
+  mo.unsched.prin<-0
+  for(m in 1:orig.term){
+    mo.int<-mo.bbal * monthly.rate
+    mo.sched.prin<-level.pay - mo.int
+    mo.eschedbal<-mo.bbal - mo.sched.prin
+    mo.unsched.prin<-mo.eschedbal*smm[m]
+    #mo.prin<-min(mo.bbal,mo.sched.prin + mo.unsched.prin)
+    mo.prin<-mo.sched.prin + mo.unsched.prin
+    
+    mo.ebal<-mo.bbal - mo.prin
+    cf[m,bbal:=round(mo.bbal,2)]
+    cf[m,int:=round(mo.int,2)]
+    cf[m,sched.prin:=round(mo.sched.prin,2)]
+    cf[m,unsched.prin:=round(mo.unsched.prin,2)]
+    cf[m,prin:=round(mo.prin,2)]
+    cf[m,eschedbal:=round(mo.eschedbal,2)]
+    cf[m,ebal:=round(mo.ebal,2)]
+    if(mo.ebal<=0.005) break
+    mo.bbal<-mo.ebal # for next month
+  }
+  return (cf)
+} # amort.loan.cf
+``` 
+
+
+```{r amort.pool.cf_f}
+# amortize pool consisting of many loans of 0.01 each
+# CPR represents % of loans that pay in full that month
+# 
+
+amort.pool.cf<-function(orig.term,note.rate,orig.bal,cpr=c(NA))
+{
+  monthly.rate<-note.rate/12
+  if(is.na(cpr[1])){
+    smm<-replicate(orig.term,0)
+  } else {
+    smm<-1-(1-cpr)^(1/12)
+  }
+  cf<-data.table(mon=1:orig.term)
+  cf[1,bbal:=orig.bal]
+  cf[,int:=0]
+  cf[,sched.prin:=0]
+  cf[,unsched.prin:=0]
+  cf[,prin:=0]
+  cf[,eschedbal:=0]
+  cf[,ebal:=0]
+  mo.bbal<-orig.bal
+  mo.unsched.prin<-0
+  for(m in 1:orig.term){
+    level.pay<-level.pay.calc(orig.term+1-m,monthly.rate)*mo.bbal
+    mo.int<-mo.bbal * monthly.rate
+    mo.sched.prin<-level.pay - mo.int
+    mo.eschedbal<-mo.bbal - mo.sched.prin
+    mo.unsched.prin<-mo.eschedbal*smm[m]
+    mo.prin<-mo.sched.prin + mo.unsched.prin
+    
+    mo.ebal<-mo.bbal - mo.prin
+    cf[m,bbal:=round(mo.bbal,2)]
+    cf[m,int:=round(mo.int,2)]
+    cf[m,sched.prin:=round(mo.sched.prin,2)]
+    cf[m,unsched.prin:=round(mo.unsched.prin,2)]
+    cf[m,prin:=round(mo.prin,2)]
+    cf[m,eschedbal:=round(mo.eschedbal,2)]
+    cf[m,ebal:=round(mo.ebal,2)]
+    if(mo.ebal<=0.005) break
+    mo.bbal<-mo.ebal # for next month
+  }
+  return (cf)
+} # amort.pool.cf
+``` 
+
+```{r parameters}
+orig.term<-360
+note.rate<-0.06
+orig.bal<-100000
+scalar.cpr<-0.06 # curtailment
+cpr<-replicate(orig.term,scalar.cpr)
+
+```
+### Parameters
+
+Original Term = `r orig.term`
+
+Note rate = `r sprintf("%5.2f%%",note.rate*100)`
+
+Original Loan Balance = `r sprintf("%s",prettyNum(orig.bal,big.mark=",", scientific=FALSE))`
+
+CPR = `r sprintf("%5.2f%%",scalar.cpr*100)`
+
+
+### Amortize Single Loan
+
+```{r amort.loan}
+
+#cpr[120]<-1 # paid in full
+cf1<-amort.loan.cf(orig.term,note.rate,orig.bal,cpr)
+
+par(mar = c(6, 6, 1, 1) + 0.1) # more y axis space for rotated values param 2
+par(mgp = c(5, 1, 0)) # more space for y axis titles, param 1
+plot(cf1$mon,cf1$ebal,xaxt="n",yaxt="n")
+axis(1, at = seq(0, orig.term, 12*5))
+axis(2, at = seq(0, orig.bal, orig.bal/4),
+     prettyNum(seq(0, orig.bal, orig.bal/4),big.mark=",", scientific=FALSE),las=1)
+```
+
+### Amortize Pool
+
+```{r amort.pool}
+loan.count<-50
+pool.orig.bal<-orig.bal*loan.count
+cf2<-amort.pool.cf(orig.term,note.rate,pool.orig.bal,cpr)
+
+par(mar = c(6, 6, 1, 1) + 0.1) # more y axis space for rotated values param 2
+par(mgp = c(5, 1, 0)) # more space for y axis titles, param 1
+plot(cf2$mon,cf2$ebal,xaxt="n",yaxt="n")
+axis(1, at = seq(0, orig.term, 12*5))
+axis(2, at = seq(0, pool.orig.bal, pool.orig.bal/4),
+     prettyNum(seq(0, pool.orig.bal, pool.orig.bal/4),big.mark=",", scientific=FALSE),las=1)
+
+```
+### Simulate Pool
+
+```{r pool.simulation}
+scalar.cpr<-0.06 # annual probability of PIF
+set.seed(666)
+
+cpr<-replicate(orig.term,scalar.cpr)
+smm<-1-(1-cpr)^(1/12)
+
+for(loan.no in 1:loan.count){
+  pifcpr<-runif(n=orig.term) # random
+  pifcpr<-(pifcpr<smm)*1
+  #cpr[120]<-1 # paid in full
+  cf1<-amort.loan.cf(orig.term,note.rate,orig.bal,pifcpr)
+  if(loan.no==1){
+    accum_cf<-cf1
+  } else {
+    accum_cf<-accum_cf+cf1
+  }
+}
+accum_cf$mon<-accum_cf$mon/loan.count
+```
+
+```{r pool.simulation.results}
+
+par(mar = c(6, 6, 1, 1) + 0.1) # more y axis space for rotated values param 2
+par(mgp = c(5, 1, 0)) # more space for y axis titles, param 1
+plot(accum_cf$mon,accum_cf$ebal,xaxt="n",yaxt="n")
+axis(1, at = seq(0, orig.term, 12*5))
+axis(2, at = seq(0, pool.orig.bal, pool.orig.bal/4),
+     prettyNum(seq(0, pool.orig.bal, pool.orig.bal/4),big.mark=",", scientific=FALSE),las=1)
+lines(cf2$mon,cf2$ebal,type="l",col="red",lwd=2,lty=2)
+
+
+```
+```{r level.pay.calc_f,eval=FALSE,echo=TRUE}
+```
+```{r amort.loan.cf_f,eval=FALSE,echo=TRUE}
+```
+```{r amort.pool.cf_f,eval=FALSE,echo=TRUE}
+```
+```{r amort.loan,eval=FALSE,echo=TRUE}
+```
+```{r amort.pool,eval=FALSE,echo=TRUE}
+```
+```{r pool.simulation,eval=FALSE,echo=TRUE}
+```
+
