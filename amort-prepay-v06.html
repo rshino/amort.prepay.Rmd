@@ -9,6 +9,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 
+<meta name="author" content="Rei Shinozuka rei@reishinozuka.com" />
 
 <meta name="date" content="2025-04-26" />
 
@@ -350,6 +351,7 @@ display: none;
 
 
 <h1 class="title toc-ignore">amort-prepay-v06</h1>
+<h4 class="author">Rei Shinozuka <a href="mailto:rei@reishinozuka.com" class="email">rei@reishinozuka.com</a></h4>
 <h4 class="date">2025-04-26</h4>
 
 </div>
@@ -626,7 +628,7 @@ amort.pool.cf&lt;-function(orig.term,note.rate,orig.bal,cpr=c(NA))
     cf[m,prin:=round(mo.prin,2)]
     cf[m,eschedbal:=round(mo.eschedbal,2)]
     cf[m,ebal:=round(mo.ebal,2)]
-    if(mo.ebal&lt;=0.005) break
+    if(mo.ebal&lt;0.005) break               # half-cent tolerance
     mo.bbal&lt;-mo.ebal # for next month
   }
   return (cf)

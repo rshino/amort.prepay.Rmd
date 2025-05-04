@@ -1,7 +1,10 @@
 ---
 title: "amort-prepay-v06"
-output: html_document
+author: "Rei Shinozuka rei@reishinozuka.com"
 date: "2025-04-26"
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -134,7 +137,7 @@ amort.pool.cf<-function(orig.term,note.rate,orig.bal,cpr=c(NA))
     cf[m,prin:=round(mo.prin,2)]
     cf[m,eschedbal:=round(mo.eschedbal,2)]
     cf[m,ebal:=round(mo.ebal,2)]
-    if(mo.ebal<=0.005) break
+    if(mo.ebal<0.005) break               # half-cent tolerance
     mo.bbal<-mo.ebal # for next month
   }
   return (cf)
